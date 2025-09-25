@@ -71,7 +71,7 @@ export default function InstallationsGrid() {
       headerName: 'Status',
       width: 120,
       filter: true,
-      cellRenderer: (params: any) => {
+      cellRenderer: (params: { value: string }) => {
         const status = params.value;
         const statusColors: { [key: string]: string } = {
           submitted: 'bg-blue-100 text-blue-800',
@@ -88,7 +88,7 @@ export default function InstallationsGrid() {
       field: 'completion_percentage',
       headerName: 'Progress',
       width: 100,
-      cellRenderer: (params: any) => {
+      cellRenderer: (params: { value: number }) => {
         const percentage = params.value || 0;
         const color = percentage === 100 ? 'bg-green-500' : percentage >= 75 ? 'bg-blue-500' : percentage >= 50 ? 'bg-yellow-500' : 'bg-red-500';
         
@@ -127,7 +127,7 @@ export default function InstallationsGrid() {
     {
       headerName: 'Actions',
       width: 120,
-      cellRenderer: (params: any) => {
+      cellRenderer: (params: { data: Installation }) => {
         return `
           <div class="flex gap-1">
             <button class="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600" onclick="window.viewInstallation('${params.data.id}')">
@@ -160,11 +160,11 @@ export default function InstallationsGrid() {
 
   // Add global functions for action buttons
   useEffect(() => {
-    (window as any).viewInstallation = (id: string) => {
+    (window as unknown as { viewInstallation: (id: string) => void }).viewInstallation = (id: string) => {
       window.location.href = `/installation/${id}`;
     };
     
-    (window as any).editInstallation = (id: string) => {
+    (window as unknown as { editInstallation: (id: string) => void }).editInstallation = (id: string) => {
       // For now, just navigate to view - we can add edit modal later
       window.location.href = `/installation/${id}`;
     };
