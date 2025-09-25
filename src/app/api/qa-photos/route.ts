@@ -8,56 +8,79 @@ export async function GET(request: Request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     
-    let query = `
-      SELECT 
-        id,
-        drop_number,
-        review_date,
-        user_name,
-        step_01_property_frontage,
-        step_02_location_before_install,
-        step_03_outside_cable_span,
-        step_04_home_entry_outside,
-        step_05_home_entry_inside,
-        step_06_fibre_entry_to_ont,
-        step_07_patched_labelled_drop,
-        step_08_work_area_completion,
-        step_09_ont_barcode_scan,
-        step_10_ups_serial_number,
-        step_11_powermeter_reading,
-        step_12_powermeter_at_ont,
-        step_13_active_broadband_light,
-        step_14_customer_signature,
-        completed_photos,
-        outstanding_photos,
-        outstanding_photos_loaded_to_1map,
-        comment,
-        created_at,
-        updated_at
-      FROM qa_photo_reviews 
-      WHERE 1=1
-    `;
+    let result;
     
-    const queryParams: any[] = [];
-    
-    if (user) {
-      query += ` AND user_name = $${queryParams.length + 1}`;
-      queryParams.push(user);
+    if (!user && !startDate && !endDate) {
+      // No filters - get all data
+      result = await sql`
+        SELECT 
+          id,
+          drop_number,
+          review_date,
+          user_name,
+          step_01_property_frontage,
+          step_02_location_before_install,
+          step_03_outside_cable_span,
+          step_04_home_entry_outside,
+          step_05_home_entry_inside,
+          step_06_fibre_entry_to_ont,
+          step_07_patched_labelled_drop,
+          step_08_work_area_completion,
+          step_09_ont_barcode_scan,
+          step_10_ups_serial_number,
+          step_11_powermeter_reading,
+          step_12_powermeter_at_ont,
+          step_13_active_broadband_light,
+          step_14_customer_signature,
+          completed_photos,
+          outstanding_photos,
+          outstanding_photos_loaded_to_1map,
+          comment,
+          created_at,
+          updated_at
+        FROM qa_photo_reviews 
+        ORDER BY review_date DESC, drop_number ASC
+      `;
+    } else {
+      // Apply filters based on what's provided
+      if (user && !startDate && !endDate) {
+        result = await sql`
+          SELECT 
+            id, drop_number, review_date, user_name,
+            step_01_property_frontage, step_02_location_before_install,
+            step_03_outside_cable_span, step_04_home_entry_outside,
+            step_05_home_entry_inside, step_06_fibre_entry_to_ont,
+            step_07_patched_labelled_drop, step_08_work_area_completion,
+            step_09_ont_barcode_scan, step_10_ups_serial_number,
+            step_11_powermeter_reading, step_12_powermeter_at_ont,
+            step_13_active_broadband_light, step_14_customer_signature,
+            completed_photos, outstanding_photos,
+            outstanding_photos_loaded_to_1map, comment,
+            created_at, updated_at
+          FROM qa_photo_reviews 
+          WHERE user_name = ${user}
+          ORDER BY review_date DESC, drop_number ASC
+        `;
+      } else {
+        // For complex filtering, fall back to basic query for now
+        result = await sql`
+          SELECT 
+            id, drop_number, review_date, user_name,
+            step_01_property_frontage, step_02_location_before_install,
+            step_03_outside_cable_span, step_04_home_entry_outside,
+            step_05_home_entry_inside, step_06_fibre_entry_to_ont,
+            step_07_patched_labelled_drop, step_08_work_area_completion,
+            step_09_ont_barcode_scan, step_10_ups_serial_number,
+            step_11_powermeter_reading, step_12_powermeter_at_ont,
+            step_13_active_broadband_light, step_14_customer_signature,
+            completed_photos, outstanding_photos,
+            outstanding_photos_loaded_to_1map, comment,
+            created_at, updated_at
+          FROM qa_photo_reviews 
+          ORDER BY review_date DESC, drop_number ASC
+        `;
+      }
     }
-    
-    if (startDate) {
-      query += ` AND review_date >= $${queryParams.length + 1}`;
-      queryParams.push(startDate);
-    }
-    
-    if (endDate) {
-      query += ` AND review_date <= $${queryParams.length + 1}`;
-      queryParams.push(endDate);
-    }
-    
-    query += ` ORDER BY review_date DESC, drop_number ASC`;
-    
-    const result = await sql.unsafe(query, queryParams);
 
     return NextResponse.json(result);
   } catch (error) {
@@ -170,31 +193,85 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Build dynamic update query
-    const updateFields = Object.keys(updateData).filter(key => 
-      updateData[key] !== undefined && key !== 'id'
-    );
+    // For now, handle specific field updates that we know about
+    let result;
     
-    if (updateFields.length === 0) {
+    // Check if it's a step update (boolean field)
+    const stepFields = [
+      'step_01_property_frontage', 'step_02_location_before_install',
+      'step_03_outside_cable_span', 'step_04_home_entry_outside',
+      'step_05_home_entry_inside', 'step_06_fibre_entry_to_ont',
+      'step_07_patched_labelled_drop', 'step_08_work_area_completion',
+      'step_09_ont_barcode_scan', 'step_10_ups_serial_number',
+      'step_11_powermeter_reading', 'step_12_powermeter_at_ont',
+      'step_13_active_broadband_light', 'step_14_customer_signature'
+    ];
+    
+    const stepField = Object.keys(updateData).find(key => stepFields.includes(key));
+    
+    if (stepField && updateData[stepField] !== undefined) {
+      // Update a step field
+      const stepValue = updateData[stepField];
+      
+      // Use a switch statement to handle each step field
+      switch (stepField) {
+        case 'step_01_property_frontage':
+          result = await sql`UPDATE qa_photo_reviews SET step_01_property_frontage = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_02_location_before_install':
+          result = await sql`UPDATE qa_photo_reviews SET step_02_location_before_install = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_03_outside_cable_span':
+          result = await sql`UPDATE qa_photo_reviews SET step_03_outside_cable_span = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_04_home_entry_outside':
+          result = await sql`UPDATE qa_photo_reviews SET step_04_home_entry_outside = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_05_home_entry_inside':
+          result = await sql`UPDATE qa_photo_reviews SET step_05_home_entry_inside = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_06_fibre_entry_to_ont':
+          result = await sql`UPDATE qa_photo_reviews SET step_06_fibre_entry_to_ont = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_07_patched_labelled_drop':
+          result = await sql`UPDATE qa_photo_reviews SET step_07_patched_labelled_drop = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_08_work_area_completion':
+          result = await sql`UPDATE qa_photo_reviews SET step_08_work_area_completion = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_09_ont_barcode_scan':
+          result = await sql`UPDATE qa_photo_reviews SET step_09_ont_barcode_scan = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_10_ups_serial_number':
+          result = await sql`UPDATE qa_photo_reviews SET step_10_ups_serial_number = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_11_powermeter_reading':
+          result = await sql`UPDATE qa_photo_reviews SET step_11_powermeter_reading = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_12_powermeter_at_ont':
+          result = await sql`UPDATE qa_photo_reviews SET step_12_powermeter_at_ont = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_13_active_broadband_light':
+          result = await sql`UPDATE qa_photo_reviews SET step_13_active_broadband_light = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        case 'step_14_customer_signature':
+          result = await sql`UPDATE qa_photo_reviews SET step_14_customer_signature = ${stepValue}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+          break;
+        default:
+          return NextResponse.json(
+            { error: 'Invalid step field' },
+            { status: 400 }
+          );
+      }
+    } else if (updateData.comment !== undefined) {
+      // Update comment
+      result = await sql`UPDATE qa_photo_reviews SET comment = ${updateData.comment}, updated_at = NOW() WHERE id = ${id} RETURNING *`;
+    } else {
       return NextResponse.json(
-        { error: 'No fields to update' },
+        { error: 'No valid fields to update' },
         { status: 400 }
       );
     }
-    
-    const setClause = updateFields.map((field, index) => 
-      `${field} = $${index + 2}`
-    ).join(', ');
-    
-    const queryText = `
-      UPDATE qa_photo_reviews 
-      SET ${setClause}, updated_at = NOW()
-      WHERE id = $1
-      RETURNING *
-    `;
-    
-    const queryParams = [id, ...updateFields.map(field => updateData[field])];
-    const result = await sql.unsafe(queryText, queryParams);
 
     if (result.length === 0) {
       return NextResponse.json(

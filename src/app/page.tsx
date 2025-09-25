@@ -10,13 +10,13 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>('installations');
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-6">
+    <div className="min-h-screen bg-gray-50 p-4">
+      <div className="w-full">
+        <header className="mb-4">
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">VF Drops - Installation Management</h1>
-              <p className="text-gray-600 mt-2">Velocity Fibre Home Install Capture Checklist - Version 1.0</p>
+              <h1 className="text-2xl font-bold text-gray-900">VF Drops - Installation Management</h1>
+              <p className="text-gray-600 mt-1 text-sm">Velocity Fibre Home Install Capture Checklist - Version 1.0</p>
             </div>
             
             {/* Navigation tabs */}

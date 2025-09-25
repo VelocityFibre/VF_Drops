@@ -12,9 +12,11 @@
     "@neondatabase/serverless": "^1.0.1",
     "ag-grid-community": "^34.2.0",
     "ag-grid-react": "^34.2.0",
+    "dotenv": "^17.2.2",
     "next": "15.5.4",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
