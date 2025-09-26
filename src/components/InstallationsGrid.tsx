@@ -2,7 +2,8 @@
 
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef, GridReadyEvent, RowClickedEvent, ModuleRegistry, AllCommunityModule, themeAlpine } from 'ag-grid-community';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import FilterPanel, { FilterState } from './FilterPanel';
 
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -13,6 +14,8 @@ interface Installation {
   contractor_name: string;
   customer_name: string;
   address: string;
+  project_name?: string;
+  assigned_agent: 'Unallocated' | 'Zander' | 'Michael';
   status: 'submitted' | 'under_review' | 'complete' | 'incomplete' | 'unpaid';
   completion_percentage: number;
   date_submitted: string;
@@ -24,14 +27,29 @@ interface Installation {
 export default function InstallationsGrid() {
   const [installations, setInstallations] = useState<Installation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState<FilterState>({});
 
-  useEffect(() => {
-    fetchInstallations();
+  // Build query string from filters
+  const buildQueryString = useCallback((filterState: FilterState) => {
+    const params = new URLSearchParams();
+    Object.entries(filterState).forEach(([key, value]) => {
+      if (value !== undefined && value !== '' && value !== null) {
+        // Map frontend filter names to API parameter names
+        let apiKey = key;
+        if (key === 'dropNumber') apiKey = 'drop_number';
+        if (key === 'assignedAgent') apiKey = 'assigned_agent';
+        params.append(apiKey, value.toString());
+      }
+    });
+    return params.toString();
   }, []);
 
-  const fetchInstallations = async () => {
+  const fetchInstallations = useCallback(async (filterState: FilterState = {}) => {
     try {
-      const response = await fetch('/api/installations');
+      setLoading(true);
+      const queryString = buildQueryString(filterState);
+      const url = `/api/installations${queryString ? `?${queryString}` : ''}`;
+      const response = await fetch(url);
       const data = await response.json();
       setInstallations(data);
     } catch (error) {
@@ -39,7 +57,11 @@ export default function InstallationsGrid() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [buildQueryString]);
+
+  useEffect(() => {
+    fetchInstallations(filters);
+  }, [fetchInstallations, filters]);
 
   const columnDefs: ColDef[] = [
     {
@@ -48,6 +70,75 @@ export default function InstallationsGrid() {
       width: 120,
       pinned: 'left',
       cellStyle: { fontWeight: 'bold' }
+    },
+    {
+      field: 'project_name',
+      headerName: 'Project',
+      width: 100,
+      filter: true,
+      cellRenderer: (params: { value: string }) => {
+        const project = params.value || 'Unknown';
+        const projectColors: { [key: string]: string } = {
+          'Lawley': 'bg-blue-100 text-blue-800',
+          'Velo Test': 'bg-green-100 text-green-800',
+          'Unknown': 'bg-gray-100 text-gray-800'
+        };
+        
+        return `<span class="px-2 py-1 rounded-full text-xs font-medium ${projectColors[project] || 'bg-gray-100 text-gray-800'}">${project}</span>`;
+      }
+    },
+    {
+      field: 'project',
+      headerName: 'Project',
+      width: 120,
+      filter: true,
+      cellStyle: { fontWeight: 'bold', color: '#1f2937' }
+    },
+    {
+      field: 'assigned_agent',
+      headerName: 'Assigned Agent',
+      width: 140,
+      editable: true,
+      cellEditor: 'agSelectCellEditor',
+      cellEditorParams: {
+        values: ['Unallocated', 'Zander', 'Michael']
+      },
+      onCellValueChanged: async (params) => {
+        if (params.newValue !== params.oldValue) {
+          try {
+            const response = await fetch('/api/installations', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                id: params.data.id,
+                assigned_agent: params.newValue
+              })
+            });
+            
+            if (!response.ok) {
+              throw new Error('Failed to update assigned agent');
+            }
+            
+            console.log('Assigned agent updated successfully');
+          } catch (error) {
+            console.error('Error updating assigned agent:', error);
+            // Revert the change on error
+            params.node?.setDataValue('assigned_agent', params.oldValue);
+          }
+        }
+      },
+      cellRenderer: (params: { value: string }) => {
+        const agent = params.value || 'Unallocated';
+        const agentColors: { [key: string]: string } = {
+          'Unallocated': 'bg-gray-100 text-gray-800',
+          'Zander': 'bg-blue-100 text-blue-800',
+          'Michael': 'bg-green-100 text-green-800'
+        };
+        
+        return `<span class="px-2 py-1 rounded-full text-xs font-medium ${agentColors[agent]}">${agent}</span>`;
+      }
     },
     {
       field: 'contractor_name',
@@ -158,6 +249,31 @@ export default function InstallationsGrid() {
     window.location.href = `/installation/${event.data.id}`;
   };
 
+  // Extract unique options for filter dropdowns
+  const filterOptions = useMemo(() => {
+    const contractorOptions = [...new Set(installations.map(i => i.contractor_name))].filter(Boolean).sort();
+    const statusOptions = ['submitted', 'under_review', 'complete', 'incomplete', 'unpaid'];
+    const reviewedByOptions = [...new Set(installations.map(i => i.reviewed_by))].filter((option): option is string => Boolean(option)).sort();
+    const projectOptions = [...new Set(installations.map(i => i.project_name))].filter((option): option is string => Boolean(option)).sort();
+    const assignedAgentOptions = ['Unallocated', 'Zander', 'Michael'];
+
+    return {
+      contractorOptions,
+      statusOptions,
+      reviewedByOptions,
+      projectOptions,
+      assignedAgentOptions
+    };
+  }, [installations]);
+
+  const handleFiltersChange = useCallback((newFilters: FilterState) => {
+    setFilters(newFilters);
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setFilters({});
+  }, []);
+
   // Add global functions for action buttons
   useEffect(() => {
     (window as unknown as { viewInstallation: (id: string) => void }).viewInstallation = (id: string) => {
@@ -179,7 +295,18 @@ export default function InstallationsGrid() {
   }
 
   return (
-    <div className="w-full h-[600px] p-4">
+    <div className="w-full p-4">
+      <FilterPanel
+        filters={filters}
+        onFiltersChange={handleFiltersChange}
+        onClearFilters={handleClearFilters}
+        contractorOptions={filterOptions.contractorOptions}
+        statusOptions={filterOptions.statusOptions}
+        reviewedByOptions={filterOptions.reviewedByOptions}
+        projectOptions={filterOptions.projectOptions}
+        assignedAgentOptions={filterOptions.assignedAgentOptions}
+      />
+      
       <div className="mb-4 flex justify-between items-center">
         <div className="flex gap-4 items-center">
           <h2 className="text-xl font-semibold">Installations ({installations.length})</h2>
@@ -200,14 +327,15 @@ export default function InstallationsGrid() {
         </div>
         
         <button 
-          onClick={fetchInstallations}
+          onClick={() => fetchInstallations(filters)}
           className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          disabled={loading}
         >
-          Refresh
+          {loading ? 'Loading...' : 'Refresh'}
         </button>
       </div>
       
-      <div className="w-full h-full">
+      <div className="w-full h-[600px]">
         <AgGridReact
           theme={themeAlpine}
           rowData={installations}

@@ -8,6 +8,7 @@ export interface Installation {
   completedSteps: number;
   totalSteps: number;
   feedback?: string;
+  assignedAgent: 'Unallocated' | 'Zander' | 'Michael';
   checklist: ChecklistStep[];
 }
 
